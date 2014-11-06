@@ -28,9 +28,6 @@ body, html {
 	background-color: black;
 	font-size: 16px;
 	color: #ddd;
-	/* This shouldn't be needed, but there's something weird going on */
-	overflow: hidden;
-
 }
 
 layout-hack {
@@ -213,10 +210,12 @@ location-bar {
 		display: none;
 		width: @crosshair_width;
 		background-color: black;
-		border: @crosshair_border_width solid white;
+		/*border: @crosshair_border_width solid white;*/
+		box-shadow: 0 0 0 @crosshair_border_width white;
+
 		position: absolute;
 		padding: 0; margin: 0;
-		opacity: 0.5;
+		opacity: 0.8;
 
 		&.horizontal {
 			height: @crosshair_width;
@@ -236,15 +235,52 @@ location-bar {
 
 .crossmarker {
 	position: absolute;
-	background-image: url(marker.svg);
-	background-repeat: no-repeat;
+	@boxsize: 20px;
+	@crosssize: 31px;
+	@crossborderwidth: 1px;
+	@crosswidth: 1px;
+	@common_offset: @boxsize/2 + @crossborderwidth + @crosswidth;
+	&:before, &:after {
+		content: "";
+		background-color: black;
+		border: @crossborderwidth solid white;
+		box-sizing: content-box;
+		
+		position: absolute;
+		z-index: -1;
+	}
+	
+	
+	&:before {
+		/* Vertical bar */
+		margin-top: -@common_offset - @crosssize/2;
+		margin-left: -@common_offset;
+		height: @crosssize;
+		width: @crosswidth;
+	}
+	
+	&:after {
+		/* Horizontal bar */
+		margin-top: -@common_offset ;
+		margin-left: -@common_offset - @crosssize/2;
+		//margin-left: -@crosssize/2 - @boxsize/2;
+		//margin-top: -@boxsize/2;
+		width: @crosssize;
+		height: @crosswidth;
+	}
+
 	overflow: visible;
-	width: 20px;
-	height: 20px;
-	padding: 10px;
+	width: 0;
+	height: 0;
+	margin: 0;
+	border: 0;
 	color: black;
-	font-size: 20px;
+	padding: @boxsize/2;
+	font-size: 12px;
 	font-weight: bold;
+	line-height: 0;
+	box-sizing: border-box;
+	
 	text-shadow:
 		-1px -1px 0 white,
 		-1px 1px 0 white,
@@ -258,6 +294,17 @@ location-bar {
 	margin: 0;
 	padding: 0;
 }
+
+.fullscreenhacks() {
+	/* Why is this done this way :( */
+	height: 100%;
+	width: 100%;
+	background-color: black;
+}
+
+:-webkit-full-screen {.fullscreenhacks;}
+:full-screen {.fullscreenhacks;}
+:fullscreen {.fullscreenhacks;}
 
 #markers {
 	position: absolute;
@@ -319,6 +366,25 @@ open-modal {
 	}
 }
 
+extra-actions {
+	display: flex;
+	flex-direction: column;
+	content-justify: right;
+	extra-actions-bar {
+		display: none;
+		flex-direction: row;
+		position: absolute;
+		right: 0;
+		background-color: black;
+		padding: 10px;
+	}
+	
+	/* TODO: Hack to work on click */
+	&:hover extra-actions-bar {
+		display: flex;
+	}
+}
+
 </style>
 <script type="text/javascript" src="vendor/less.js"></script>
 </head>
@@ -351,8 +417,13 @@ open-modal {
   </location-bar>
   <button id="delete_last" title="Delete last marker (backspace)"><i class="fa fa-history"></i></button>
   <button id="toggle_catatonia" title="Enter catatonia (f)"><i class="fa fa-bullseye"></i></button>
-  <a class="button" href="." target="_blank" id="open_openmodal" title="Open new file"><i class="fa fa-folder-open"></i></a>
- 
+  <extra-actions>
+    <button><i class="fa fa-ellipsis-h"></i></button>
+    <extra-actions-bar>
+      <a class="button" href="." title="Open new file"><i class="fa fa-folder-open"></i></a>
+      <a class="button" href="." title="Download markers (ctrl-s)"><i class="fa fa-download"></i></a>
+    </extra-actions-bar> 
+  </extra-actions>
 </div>
 
 <bottom-block>
@@ -545,8 +616,8 @@ load_ui = (video) ->
 	video.stepEpochs = (n) ->
 		@.currentTime = @.getEpoch() + n*@.epochDuration
 	
-	_refresh_markers = ->
-		markers = get_markers()
+	_refresh_markers = (time=video.currentTime) ->
+		markers = get_markers(time)
 		container = $("#markers")
 		container.empty()
 		for [k, pos] in markers
@@ -559,13 +630,13 @@ load_ui = (video) ->
 				top: "#{y}%"
 			container.append(el)
 		
-		_refresh_markers_table()
+		_refresh_markers_table(time)
 	
-	_refresh_markers_table = ->
+	_refresh_markers_table = (time) ->
 		container = $("csv-block")
 		table = container.find("> table > tbody")
 		table.empty()
-		time = video.getEpoch()
+		time = video.getEpoch(time)
 		for [name, [x, y]] in get_markers()
 			x = Math.round(x*video.videoWidth)
 			y = Math.round(y*video.videoWidth)
@@ -605,15 +676,16 @@ load_ui = (video) ->
 	
 	$state.on "change.epochDuration", (ev, dur) -> set_epoch_duration dur
 	
-	$video.on "timeupdate", ->
-		# TODO: There's something weird here. As if the
-		# updates go to the dom somehow out-of-order when
-		# scrolling really fast
-		_refresh_markers()
+	$video.on "timeupdate", (ev) ->
+		# TODO: Sometimes jquery/chromium won't update the DOM immediately,
+		#	but only after an event such as mouse move. This sometimes
+		#	leaves the ui in an inconsistent state.
+		time = video.currentTime
+		_refresh_markers(time)
 		$("current-location i").css
-			left: "#{@.currentTime/@.duration*100}%"
-		$("#timetext").text @currentTime
-		$state.replace_url ts: @.currentTime
+			left: "#{time/@duration*100}%"
+		$("#timetext").text time
+		$state.replace_url ts: time
 	
 	$state.on "change.ts", (ev, newts) ->
 		video.currentTime = newts
@@ -658,7 +730,7 @@ load_ui = (video) ->
 		if document.webkitFullscreenElement
 			document.webkitExitFullscreen()
 			return
-		$("#videocontainer").get(0).webkitRequestFullscreen()
+		$("#videocell").get(0).webkitRequestFullscreen()
 		return false
 	
 	$("#toggle_catatonia").click toggle_catatonia
