@@ -569,15 +569,15 @@ load_ui = (video) ->
 	$state.on "change.ts", (ev, newts) ->
 		video.currentTime = newts
 	
+	$("location-bar").on "click", "marker-tag", (ev) ->
+		video.currentTime = $(@).data("time")
+		return false
+	
 	$("location-bar").click (ev) ->
 		x = ev.pageX - $(@).offset().left
 		rel_x = x/$(@).innerWidth()
 		time = video.duration*rel_x
 		video.currentTime = video.getEpoch time
-	
-	$("marker-tag").click (ev) ->
-		video.currentTime = $(@).data("time")
-		return false
 
 	act = -> video.stepEpochs 1; return false
 	$("#epoch_forward").click act
