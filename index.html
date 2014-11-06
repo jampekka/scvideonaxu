@@ -10,19 +10,23 @@
 <script type="text/javascript" src="vendor/hasher.js"></script>
 <script type="text/javascript" src="vendor/mousetrap.js"></script>
 <script type="text/javascript" src="vendor/jquery.mousewheel.js"></script>
+<script type="text/javascript" src="vendor/jquery.injectCSS.js"></script>
 <!-- TODO: Allow offline -->
 <!-- Latest compiled and minified CSS -->
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css">
 <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
-<style type="text/css">
+<style type="text/less">
 body, html {
 	width: 100%;
 	height: 100%;
 	margin: 0;
 	padding: 0;
 	background-color: black;
-	font-size: 20px;
+	font-size: 16px;
 	color: #ddd;
+	/* This shouldn't be needed, but there's something weird going on */
+	overflow: hidden;
+
 }
 
 layout-hack {
@@ -33,24 +37,30 @@ layout-hack {
 	height: 100%;
 }
 
-button {
-	font-size: 30px;
+button, .button {
+	display: inline-block;
+	font-size: 24px;
 	background-color: transparent;
 	border: 0;
 	padding: 8px;
 	margin: 3px;
-	color: inherit;
+	color: #ddd;
 	outline: 0 none;
-}
+	width: 2em;
+	height: 2em;
+	text-align: center;
+	box-sizing: border-box;
 
-button:active, button:focus {
-	border: 0;
-}
+	&:active, &:focus {
+		border: 0;
+	}
 
-button:hover {
-	background-color: #222;
-	border: 0;
-	border-radius: 3px;
+	&:hover {
+		color: #ddd;
+		background-color: #222;
+		border: 0;
+		border-radius: 3px;
+	}
 }
 
 open-modal {
@@ -76,7 +86,75 @@ open-modal {
 #controls {
 	width: 100%;
 	flex-shrink: 0;
+	display: flex;
+	flex-direction: row;
 	background-color: rgba(0,0,0,0.5);
+
+	> * {
+		flex-shrink: 0;
+		flex-grow: 0;
+	}
+
+	> location-bar {
+		flex-grow: 1;
+	}
+
+	time-indicator {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-content: center;
+		> span {
+			display: block;
+			text-align: right;
+			font-family: monospace;
+		}
+		
+		font-size: 16px;
+		font-weight: bold;
+
+		min-width: 5em;
+		margin: 10px;
+		
+	}
+}
+
+location-bar {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	
+	cursor: text;
+
+	location-stripe {
+		width: 100%;
+		height: 3px;
+		background-color: #333;
+		cursor: text;
+
+		marker-tag {
+			position: absolute;
+			margin: 0;
+			padding: 0;
+			background-color: #ddd;
+			height: 100%;
+			min-width: 1px;
+		}
+	}
+
+	> * {
+		display: block;
+		position: relative;
+		width: 100%;
+	}
+
+	> * > i {
+		display: block;
+		position: absolute;
+		overflow: visible;
+		text-align: center;
+		line-height: 0;
+	}
 }
 
 #controls > .filecontrols {
@@ -153,13 +231,12 @@ bottom-block {
 csv-block {
 	width: 300px;
 	overflow: auto;
-	background-color: white;
+	background-color: #eee;
 	color: black;
-}
-
-csv-block > .markertable {
-	color: #333;
-	width: 100%;
+	> .markertable {
+		color: #333;
+		width: 100%;
+	}
 }
 
 csv-block > .timeheader {
@@ -171,29 +248,71 @@ csv-block > .timeheader {
 	padding: 10px;
 }
 
+open-modal {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+
+	padding: 30px;
+	> .closemodal {
+		position: absolute;
+		right: 0;
+		top: 0;
+	}
+
+	button {
+		width: 2em;
+		height: 2em;
+	}
+	
+	huge-buttons {
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		#openlocalbutton {
+			font-size: 80px;
+		}
+	}
+}
+
 </style>
+<script type="text/javascript" src="vendor/less.js"></script>
 </head>
 
 <body>
+<!-- This would be a wholly separate page if the file handle could be transferred -->
+<open-modal>
+<input style="display: none" type="file" id="fileselector" accept="video/*"></input>
+<huge-buttons>
+<button onclick="$('#fileselector').click()" id="openlocalbutton" title="Open local video"><i class="fa fa-upload"></i></button>
+</huge-buttons>
+
+</open-modal>
+
 <layout-hack>
 
 <div id="controls">
-  <div class="filecontrols">
-    <input style="display: none" type="file" id="fileselector" accept="video/*"></input>
-    <button onclick="$('#fileselector').click()" title="Open local video"><i class="fa fa-upload"></i></button>
-  </div>
-  <div class="playcontrols disabled">
-    <button id="epoch_backward"><i class="fa fa-step-backward"></i></button>
-    <button id="epoch_forward"><i class="fa fa-step-forward"></i></button>
-    <button id="toggle_zen" title="Enter catatonia"><i class="fa fa-arrows-alt"></i></button>
-  </div>
+  <button id="epoch_backward"><i class="fa fa-step-backward"></i></button>
+  <button id="epoch_forward"><i class="fa fa-step-forward"></i></button>
+  <time-indicator><span><span id="timetext"></span>s</span></time-indicator>
+  <location-bar>
+
+    <location-notes>
+      <!--<i class="fa fa-comment"></i>-->
+    </location-notes>
+    <location-stripe></location-stripe>
+    <current-location>
+      <i class="fa fa-caret-up"></i>
+    </current-location>
+  </location-bar>
+  <button id="delete_last" title="Delete last marker (backspace)"><i class="fa fa-undo"></i></button>
+  <button id="toggle_catatonia" title="Enter catatonia (f)"><i class="fa fa-arrows-alt"></i></button>
+  <a class="button" href="." target="_blank" id="open_openmodal" title="Open new file"><i class="fa fa-folder-open"></i></a>
+ 
 </div>
 
 <bottom-block>
 
-<open-modal>
-<button class="closemodal"><i class="fa fa-close"></i></button>
-</open-modal>
 
 <div id="videocell">
   <div id="videocontainer">
@@ -205,7 +324,6 @@ csv-block > .timeheader {
 </div>
 
 <csv-block>
-<h4 class="timeheader"></h4>
 <table class="markertable table">
 <thead>
 <tr><th>Name</th><th>x</th><th>y</th></tr>
@@ -221,213 +339,267 @@ csv-block > .timeheader {
 </body>
 
 <script type="text/coffeescript">
-# TODO: THIS IS FUGLY!
-state = {}
-$state = $ {}
-
-# God damn W3, have to do everything yourself
-videomouse = undefined
-$("#videocontainer > .overlay").on "mousemove", (ev) ->
-	x = ev.pageX - $(@).offset().left
-	y = ev.pageY - $(@).offset().top
-	videomouse = [x/$(@).width(), y/$(@).height()]
-
-$("#videocontainer > .overlay").on "mouseout", (ev) ->
-	videomouse = undefined
-
-$state.replace_url = (newstuff) ->
-	newstate = _.extend _.clone(state), newstuff
-	hasher.changed.active = false
-	hasher.replaceHash $.param newstate
-	hasher.changed.active = true
+# TODO: This is a mess
+$ ->
+	$video = $ "#videocontainer > video"
+	video = $video.get(0)
+	$video.on "error", (args...) ->
+		console.log "The details:", video.error
+		alert "Oops, an error occurred, see the console log for details."
 	
-$state.replace = (newstuff) ->
-	newstate = _.extend _.clone(state), newstuff
-	hasher.replaceHash $.param newstate
-
-$state.update = (newstuff) ->
-	newstate = _.extend _.clone(state), newstuff
-	hasher.setHash $.param newstate
-
-$state.update_url = (newstuff) ->
-	newstate = _.extend _.clone(state), newstuff
-	hasher.changed.active = false
-	hasher.setHash $.param newstate
-	hasher.changed.active = true
-
-$state._refresh = (newstate) =>
-	oldstate = _.clone state
-	state = $.deparam newstate
-	for k in _.union _.keys(state), _.keys(oldstate)
-		oldval = oldstate[k]
-		newval = state[k]
-		continue if oldval == newval
-		$state.trigger "change.#{k}", [newval, oldval]
-
-$video = $ "#videocontainer > video"
-video = $video[0]
-loaded_videourl = undefined
-
-# Could you in W3C please fix these trivial things?
-rescaling_hack_that_shouldnt_be_needed = (el, sizegetter, interval=100) ->
-	hack_the_fucking_rescale = ->
-		[w, h] = sizegetter()
-		p = el.parent()
-		scale = Math.min p.innerWidth()/w, p.innerHeight()/h
-		new_w = w*scale
-		new_h = h*scale
-		if Math.abs(el.width() - new_w) < 1 and Math.abs(el.height() - new_h) < 1
+	$("#fileselector").change ->
+		if @.files.length < 1
 			return
-		el.width(w*scale)
-		el.height(h*scale)
-
-	setInterval hack_the_fucking_rescale, interval
-rescaling_hack_that_shouldnt_be_needed $("#videocontainer"), -> [video.videoWidth, video.videoHeight]
-
-get_all_markers = ->
-	markers = JSON.parse localStorage.getItem video.src
-	if not markers
-		markers = {}
-	return markers
-
-add_marker = (name, position, time) ->
-	if not time?
-		time = video.getCurrentEpoch()
-	markers = get_all_markers()
-	if time not of markers
-		markers[time] = []
-	
-	markers[time].push [name, position]
-	localStorage.setItem video.src, JSON.stringify markers
-	_refresh_markers_table()
-	_refresh_markers()
-
-get_markers = (time) ->
-	if not time?
-		time = video.getCurrentEpoch()
-	markers = get_all_markers()
-
-	if time not of markers
-		return {}
-	return markers[time]
-
-video.getCurrentEpoch = ->
-	epoch = Math.floor @.currentTime/@.epochDuration
-	return epoch*@.epochDuration
-
-video.stepEpochs = (n) ->
-	@.currentTime = @.getCurrentEpoch() + n*@.epochDuration
-
-_refresh_markers = ->
-	markers = get_markers()
-	container = $("#markers")
-	container.empty()
-	for [k, pos] in markers
-		x = pos[0]*100
-		y = pos[1]*100
-		el = $("<div class='crossmarker'>")
-		el.text(k)
-		el.css
-			left: "#{x}%"
-			top: "#{y}%"
-		container.append(el)
-	
-	_refresh_markers_table()
-
-_refresh_markers_table = ->
-	container = $("csv-block")
-	table = container.find("> table > tbody")
-	table.empty()
-	time = video.getCurrentEpoch()
-	container.find("> .timeheader").text "#{time}s"
-	for [name, [x, y]] in get_markers()
-		x = Math.round(x*video.videoWidth)
-		y = Math.round(y*video.videoWidth)
-		row = $("<tr>").appendTo table
-		row.append($ ("<td>#{v}</td>" for v in [name, x, y]).join(''))
-
+		video.localfile = @.files[0]
+		videourl = URL.createObjectURL @.files[0]
+		video.src = videourl
 		
-
-$video.on "error", (args...) ->
-	console.log "The details:", video.error
-	alert "Oops, an error occurred, see the console log for details."
-
-$video.on "loadeddata", ->
-	loaded_videourl = @.src
-	video.currentTime = state.ts ? 0
-	$("#controls .playcontrols").removeClass 'disabled'
-
-$state.on "change.url", (ev, url) ->
-	video.src = url
-	_refresh_markers_table()
-	video.load()
-
-$state.on "change.epochDuration", (ev, dur) ->
-	video.epochDuration = dur
-	$("#epoch_forward").prop "title", "#{dur}s forward"
-	$("#epoch_backward").prop "title", "#{dur}s backward"
-
-$video.on "timeupdate", ->
-	_refresh_markers()
-	$state.replace_url ts: @.currentTime
-
-$("#fileselector").change ->
-	if @.files.length < 1
-		return
-	videourl = URL.createObjectURL @.files[0]
-	$state.update
-		ts: 0
-		url: videourl
-		epochDuration: 1/4.0
-
-act = -> video.stepEpochs 1; return false
-$("#epoch_forward").click act
-Mousetrap.bind "right", act
-Mousetrap.bind "space", act
-
-act = -> video.stepEpochs -1; return false
-$("#epoch_backward").click act
-Mousetrap.bind "left", act
-
-$("#markers").mousewheel (e) ->
-	console.log e
-	video.stepEpochs e.deltaY
-
-$(document).keypress (ev) ->
-	if not videomouse
-		return
-	button = String.fromCharCode(ev.keyCode)
-	if not $.isNumeric(button)
-		return
+	$video.on "loadeddata", ->
+		video.marker_id = [video.localfile.name, video.duration, video.localfile.size].join('/')
+		load_ui video
+		$("open-modal").fadeOut()
 	
-	ev.preventDefault()
-	ev.stopPropagation()
-	add_marker(button, videomouse)
+	# Doesn't seem to work :(
+	$('#fileselector').click()
+	
+load_ui = (video) ->
+	$video = $ video
+	# TODO: THIS IS FUGLY!
+	$state = $ {}
+	state = {}
+	
+	# God damn W3, have to do everything yourself
+	videomouse = undefined
+	$("#videocontainer > .overlay").on "mousemove", (ev) ->
+		x = ev.pageX - $(@).offset().left
+		y = ev.pageY - $(@).offset().top
+		videomouse = [x/$(@).width(), y/$(@).height()]
+	
+	$("#videocontainer > .overlay").on "mouseout", (ev) ->
+		videomouse = undefined
+	
+	$state.replace_url = (newstuff) ->
+		newstate = _.extend _.clone(state), newstuff
+		hasher.changed.active = false
+		hasher.replaceHash $.param newstate
+		hasher.changed.active = true
+		
+	$state.replace = (newstuff) ->
+		newstate = _.extend _.clone(state), newstuff
+		hasher.replaceHash $.param newstate
+	
+	$state.update = (newstuff) ->
+		newstate = _.extend _.clone(state), newstuff
+		hasher.setHash $.param newstate
+	
+	$state.update_url = (newstuff) ->
+		newstate = _.extend _.clone(state), newstuff
+		hasher.changed.active = false
+		hasher.setHash $.param newstate
+		hasher.changed.active = true
+	
+	$state._refresh = (newstate) =>
+		oldstate = _.clone state
+		state = $.deparam newstate
+		for k in _.union _.keys(state), _.keys(oldstate)
+			oldval = oldstate[k]
+			newval = state[k]
+			continue if oldval == newval
+			$state.trigger "change.#{k}", [newval, oldval]
+	
+	$video = $ "#videocontainer > video"
+	video = $video[0]
+	
+	# Could you in W3C please fix these trivial things?
+	rescaling_hack_that_shouldnt_be_needed = (el, sizegetter, interval=100) ->
+		hack_the_fucking_rescale = ->
+			[w, h] = sizegetter()
+			p = el.parent()
+			scale = Math.min p.innerWidth()/w, p.innerHeight()/h
+			new_w = w*scale
+			new_h = h*scale
+			if Math.abs(el.width() - new_w) < 1 and Math.abs(el.height() - new_h) < 1
+				return
+			el.width(w*scale)
+			el.height(h*scale)
+	
+		setInterval hack_the_fucking_rescale, interval
+	rescaling_hack_that_shouldnt_be_needed $("#videocontainer"), -> [video.videoWidth, video.videoHeight]
+	
+	get_all_markers = ->
+		markers = JSON.parse localStorage.getItem "supercatatoniavideonaxu/#{video.marker_id}/markers"
+		if not markers
+			markers = {}
+		return markers
+	
+	add_marker = (name, position, time) ->
+		if not time?
+			time = video.getEpoch()
+		markers = get_all_markers()
+		if time not of markers
+			markers[time] = []
+		
+		markers[time].push [name, position]
+		localStorage.setItem "supercatatoniavideonaxu/#{video.marker_id}/markers", JSON.stringify markers
+		_markers_changed()
+	
+	delete_marker = (index=-1, time) ->
+		if not time
+			time = video.getEpoch()
+		markers = get_all_markers()
+		if time not of markers
+			markers[time] = []
+		markers[time].splice index, 1
+		if markers[time].length == 0
+			delete markers[time]
+		localStorage.setItem "supercatatoniavideonaxu/#{video.marker_id}/markers", JSON.stringify markers
+		_markers_changed()
+	
+	_markers_changed = ->
+		_refresh_markers()
+		_refresh_marker_bar()
+	
+	get_markers = (time) ->
+		if not time?
+			time = video.getEpoch()
+		markers = get_all_markers()
+	
+		if time not of markers
+			return []
+		return markers[time]
+	
+	video.getEpoch = (time=@.currentTime) ->
+		epoch = Math.floor time/@.epochDuration
+		return epoch*@.epochDuration
+	
+	video.stepEpochs = (n) ->
+		@.currentTime = @.getEpoch() + n*@.epochDuration
+	
+	_refresh_markers = ->
+		markers = get_markers()
+		container = $("#markers")
+		container.empty()
+		for [k, pos] in markers
+			x = pos[0]*100
+			y = pos[1]*100
+			el = $("<div class='crossmarker'>")
+			el.text(k)
+			el.css
+				left: "#{x}%"
+				top: "#{y}%"
+			container.append(el)
+		
+		_refresh_markers_table()
+	
+	_refresh_markers_table = ->
+		container = $("csv-block")
+		table = container.find("> table > tbody")
+		table.empty()
+		time = video.getEpoch()
+		for [name, [x, y]] in get_markers()
+			x = Math.round(x*video.videoWidth)
+			y = Math.round(y*video.videoWidth)
+			row = $("<tr>").appendTo table
+			row.append($ ("<td>#{v}</td>" for v in [name, x, y]).join(''))
+	
+	_refresh_marker_bar = ->
+		bar = $("location-stripe")
+		bar.empty()
+		for time, markers of get_all_markers()
+			if markers.length == 0
+				continue
+			rel_time = time/video.duration
+			el = $("<marker-tag>").appendTo bar
+			el.css left: "#{rel_time*100}%"
+	
+	$video.on "error", (args...) ->
+		console.log "The details:", video.error
+		alert "Oops, an error occurred, see the console log for details."
+	
+	
+	# TODO: Fix this if we get any foreign videos or figure out
+	#	how to "reuse" locals
+	#$state.on "change.url", (ev, url) ->
+	#	video.src = url
+	#	_refresh_markers_table()
+	#	video.load()
+	
+	set_epoch_duration = (dur) ->
+		video.epochDuration = dur
+		$("#epoch_forward").prop "title", "#{dur}s forward (space, right, mouse scroll up)"
+		$("#epoch_backward").prop "title", "#{dur}s backward (left, mouse scroll down)"
+		$.injectCSS
+			"marker-tag":
+				"width": "#{video.epochDuration/video.duration*100}%"
+		_refresh_marker_bar()
+	
+	$state.on "change.epochDuration", (ev, dur) -> set_epoch_duration dur
+	
+	$video.on "timeupdate", ->
+		# TODO: There's something weird here. As if the
+		# updates go to the dom somehow out-of-order when
+		# scrolling really fast
+		_refresh_markers()
+		$("current-location i").css
+			left: "#{@.currentTime/@.duration*100}%"
+		$("#timetext").text @currentTime
+		$state.replace_url ts: @.currentTime
+	
+	$state.on "change.ts", (ev, newts) ->
+		video.currentTime = newts
+	
+	$("location-bar").click (ev) ->
+		x = ev.pageX - $(@).offset().left
+		rel_x = x/$(@).innerWidth()
+		time = video.duration*rel_x
+		video.currentTime = video.getEpoch time
+	
+	act = -> video.stepEpochs 1; return false
+	$("#epoch_forward").click act
+	Mousetrap.bind "right", act
+	Mousetrap.bind "space", act
+	
+	act = -> video.stepEpochs -1; return false
+	$("#epoch_backward").click act
+	Mousetrap.bind "left", act
+	
+	$("#markers").mousewheel (e) ->
+		video.stepEpochs e.deltaY
+	
+	$(document).keypress (ev) ->
+		if not videomouse
+			return
+		button = String.fromCharCode(ev.keyCode)
+		if not $.isNumeric(button)
+			return
+		
+		ev.preventDefault()
+		ev.stopPropagation()
+		add_marker(button, videomouse)
+	
+	Mousetrap.bind "backspace", -> delete_marker(); return false
+	$("#delete_last").click -> delete_marker()
+	
+	toggle_catatonia = ->
+		if document.webkitFullscreenElement
+			document.webkitExitFullscreen()
+			return
+		$("#videocontainer").get(0).webkitRequestFullscreen()
+		return false
+	
+	$("#toggle_catatonia").click toggle_catatonia
+	Mousetrap.bind 'f', toggle_catatonia
+	
+	close_new_project_dialog = ->
+		$("open-modal").fadeOut()
+	
 
-$("#markertable").on "click", "h4", ->
-	video.currentTime = $(@).parent().data("time")
-
-toggle_zen = ->
-	if document.webkitFullscreenElement
-		document.webkitExitFullscreen()
-		return
-	$("#videocontainer").get(0).webkitRequestFullscreen()
-	return false
-
-$("#toggle_zen").click toggle_zen
-Mousetrap.bind 'f', toggle_zen
-
-open_new_project_dialog = ->
-	$("openmodal").fadeIn()
-
-close_new_project_dialog = ->
-	$("openmodal").fadeOut()
-
-#$("openmodal .closemodal").click close_new_project_dialog
-
-
-hasher.changed.add $state._refresh
-hasher.initialized.add $state._refresh
-hasher.init()
+	# This will be overriden by url if available.
+	# Yes, it's ugly.
+	set_epoch_duration 0.25
+	
+	hasher.changed.add $state._refresh
+	hasher.initialized.add $state._refresh
+	hasher.init()
 </script>
 </html>
