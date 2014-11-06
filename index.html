@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <!--
+  Released under AGPLv3 license.
   Copyright 2014 Otto Lappi <otto.lappi@helsinki.fi>
   Technical contact: Jami Pekkanen <jami.pekkanen@helsinki.fi>
 -->
@@ -192,6 +193,45 @@ location-bar {
 	width: 100%;
 	height: 100%;
 	z-index: 1;
+
+	@crosshair_width: 1px;
+	@crosshair_border_width: 1px;
+
+	crosshair-area {
+		pointer-events: none;
+		position: absolute;
+		display: block;
+		width: 100%;
+		height: 100%;
+		padding: 0; margin: 0;
+		z-index: 3;
+	}
+	crosshair-bar {
+		cursor: none;
+		pointer-events: none;
+		box-sizing: content-box;
+		display: none;
+		width: @crosshair_width;
+		background-color: black;
+		border: @crosshair_border_width solid white;
+		position: absolute;
+		padding: 0; margin: 0;
+		opacity: 0.5;
+
+		&.horizontal {
+			height: @crosshair_width;
+			width: 100%;
+			margin-top: -@crosshair_width;
+		}
+		
+		&.vertical {
+			width: @crosshair_width;
+			height: 100%;
+			margin-left: -@crosshair_width;
+		}
+		
+
+	}
 }
 
 .crossmarker {
@@ -220,11 +260,11 @@ location-bar {
 }
 
 #markers {
-	position: relative;
+	position: absolute;
 	width: 100%;
 	height: 100%;
 	margin: 0; padding: 0;
-	cursor: crosshair;
+	cursor: none;
 }
 
 bottom-block {
@@ -322,6 +362,10 @@ open-modal {
   <div id="videocontainer">
     <div class="overlay">
       <div id="markers"></div>
+      <crosshair-area>
+        <crosshair-bar class="horizontal"></crosshair-bar>
+        <crosshair-bar class="vertical"></crosshair-bar>
+      </crosshair-area>
     </div>
     <video></video>
   </div>
@@ -395,9 +439,14 @@ load_ui = (video) ->
 		x = ev.pageX - $(@).offset().left
 		y = ev.pageY - $(@).offset().top
 		videomouse = [x/$(@).width(), y/$(@).height()]
+
+		$("crosshair-bar").css display: "block"
+		$("crosshair-bar.vertical").css left: videomouse[0]*100 + "%"
+		$("crosshair-bar.horizontal").css top: videomouse[1]*100 + "%"
 	
 	$("#videocontainer > .overlay").on "mouseout", (ev) ->
 		videomouse = undefined
+		$("crosshair-bar").css display: "none"
 	
 	$state.replace_url = (newstuff) ->
 		newstate = _.extend _.clone(state), newstuff
