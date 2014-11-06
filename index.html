@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+<!--
+  Copyright 2014 Otto Lappi <otto.lappi@helsinki.fi>
+  Technical contact: Jami Pekkanen <jami.pekkanen@helsinki.fi>
+-->
 <html>
 <head>
 <title>Supercatatoniavideonaxu!</title>
@@ -12,7 +16,6 @@
 <script type="text/javascript" src="vendor/jquery.mousewheel.js"></script>
 <script type="text/javascript" src="vendor/jquery.injectCSS.js"></script>
 <!-- TODO: Allow offline -->
-<!-- Latest compiled and minified CSS -->
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css">
 <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
 <style type="text/less">
@@ -139,6 +142,7 @@ location-bar {
 			background-color: #ddd;
 			height: 100%;
 			min-width: 1px;
+			cursor: pointer;
 		}
 	}
 
@@ -340,6 +344,18 @@ open-modal {
 
 <script type="text/coffeescript">
 # TODO: This is a mess
+
+video_errors_check = (video) ->
+	errors = []
+	if not video.duration
+		errors.push "The video seems to be empty."
+	if video.videoWidth == 0 or video.videoHeight == 0
+		errors.push "There doesn't seem to be video, or I couldn't understand it."
+	if video.seekable.length == 0
+		errors.push "Can't seek in this video, so it's a bad fit for naxu."
+	
+	return errors
+
 $ ->
 	$video = $ "#videocontainer > video"
 	video = $video.get(0)
@@ -355,6 +371,11 @@ $ ->
 		video.src = videourl
 		
 	$video.on "loadeddata", ->
+		errors = video_errors_check video
+		if errors.length > 0
+			console.log "The details:", errors
+			alert "Invalid video, see the log for details."
+			return
 		video.marker_id = [video.localfile.name, video.duration, video.localfile.size].join('/')
 		load_ui video
 		$("open-modal").fadeOut()
@@ -509,7 +530,7 @@ load_ui = (video) ->
 			if markers.length == 0
 				continue
 			rel_time = time/video.duration
-			el = $("<marker-tag>").appendTo bar
+			el = $("<marker-tag data-time='#{time}'>").appendTo bar
 			el.css left: "#{rel_time*100}%"
 	
 	$video.on "error", (args...) ->
@@ -554,6 +575,10 @@ load_ui = (video) ->
 		time = video.duration*rel_x
 		video.currentTime = video.getEpoch time
 	
+	$("marker-tag").click (ev) ->
+		video.currentTime = $(@).data("time")
+		return false
+
 	act = -> video.stepEpochs 1; return false
 	$("#epoch_forward").click act
 	Mousetrap.bind "right", act
