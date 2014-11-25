@@ -11,6 +11,7 @@
 <title>Supercatatoniavideonaxu!</title>
 <script type="text/javascript" src="vendor/coffee-script.js"></script>
 <script type="text/javascript" src="vendor/underscore.js"></script>
+<script type="text/javascript" src="vendor/underscore.string.js"></script>
 <script type="text/javascript" src="vendor/jquery-2.1.1.min.js"></script>
 <script type="text/javascript" src="vendor/jquery-deparam.js"></script>
 <script type="text/javascript" src="vendor/Dexie.js"></script>
@@ -130,9 +131,37 @@ location-bar {
 	
 	cursor: text;
 
+
+
+	> * {
+		display: block;
+		flex-grow: 1;
+		position: relative;
+		width: 100%;
+	}
+
+	> * > i {
+		display: block;
+		position: absolute;
+		overflow: visible;
+		text-align: center;
+		line-height: 0;
+	}
+	
+	.comment-tag {
+		position: absolute;
+		margin: 0;
+		padding: 0;
+		height: 100%;
+		width: 10px;
+		cursor: pointer;
+	}
+	
 	location-stripe {
 		width: 100%;
 		height: 3px;
+		flex-grow: 0;
+		flex-shrink: 0;
 		background-color: #333;
 		cursor: text;
 
@@ -145,20 +174,8 @@ location-bar {
 			min-width: 1px;
 			cursor: pointer;
 		}
-	}
 
-	> * {
-		display: block;
-		position: relative;
-		width: 100%;
-	}
-
-	> * > i {
-		display: block;
-		position: absolute;
-		overflow: visible;
-		text-align: center;
-		line-height: 0;
+		
 	}
 }
 
@@ -401,7 +418,7 @@ extra-actions {
 <body>
 <!-- This would be a wholly separate page if the file handle could be transferred -->
 <open-modal>
-<input style="display: none" type="file" id="fileselector" accept="video/*"></input>
+<input style="display: none" type="file" id="fileselector" accept="video/*,.comments.json" multiple></input>
 <huge-buttons>
 <button onclick="$('#fileselector').click()" id="openlocalbutton" title="Open local video"><i class="fa fa-upload"></i></button>
 </huge-buttons>
@@ -417,7 +434,7 @@ extra-actions {
   <location-bar>
 
     <location-notes>
-      <!--<i class="fa fa-comment"></i>-->
+      <i class="fa fa-comment"></i>
     </location-notes>
     <location-stripe></location-stripe>
     <current-location>
@@ -490,9 +507,40 @@ $ ->
 	$("#fileselector").change ->
 		if @.files.length < 1
 			return
-		video.localfile = @.files[0]
-		videourl = URL.createObjectURL @.files[0]
-		video.src = videourl
+		
+		# Yep, end in the beginning. The beauty of JS's
+		# horrible async.
+		setup = (videofile, comments=[]) ->
+			video.comments = comments
+			video.localfile = videofile
+			videourl = URL.createObjectURL videofile
+			video.src = videourl
+		
+		videofiles = _.filter @.files, (f) -> _.str.startsWith f.type, "video/"
+		if videofiles.length != 1
+			alert "Oops! The selection must include exactly one video file! Let's have another try!"
+			return
+		
+		commentfiles = _.filter @.files, (f) -> _.str.endsWith f.name, "comments.json"
+		
+		if commentfiles.length > 1
+			alert "Hmm.. there are two comment files and we computers get easily confused in such ambiguous situations. Please help me out by trying again and this time selecting at most one .comment.json file."
+			return
+		if commentfiles.length == 0
+			setup videofiles[0]
+			return
+
+		# If we end up here, we have exactly one comment file.
+		# OMG! Who the hell comes up with these JS APIs?
+		# Larry Wall, Bjarne Stroustrup and whoever designed the
+		# Java standard library get drunk and merge
+		# everyone's worst ideas?
+		reader = new FileReader()
+		reader.onload = (ev) ->
+			comments = JSON.parse reader.result
+			setup videofiles[0], comments
+		reader.readAsText(commentfiles[0])
+		
 		
 	$video.on "loadeddata", ->
 		errors = video_errors_check video
@@ -505,7 +553,7 @@ $ ->
 		$("open-modal").fadeOut()
 	
 	# Doesn't seem to work :(
-	$('#fileselector').click()
+	#$('#fileselector').click()
 	
 load_ui = (video) ->
 	$video = $ video
@@ -576,6 +624,8 @@ load_ui = (video) ->
 		setInterval hack_the_fucking_rescale, interval
 	rescaling_hack_that_shouldnt_be_needed $("#videocontainer"), -> [video.videoWidth, video.videoHeight]
 	
+	
+
 	# TODO: We could probably hook into the DB events
 	#	for nicer refreshes
 	markerdb = new Dexie "supercatatoniavideonaxu/#{video.marker_id}"
@@ -678,6 +728,18 @@ load_ui = (video) ->
 			el = $("<marker-tag data-time='#{time}'>").appendTo bar
 			el.css left: "#{rel_time*100}%"
 	
+	
+	_refresh_comments_bar = (comments) ->
+		bar = $("location-notes")
+		bar.empty()
+		for {time, text} in comments
+			rel_time = time/video.duration
+			el = $ "<i class='comment-tag fa fa-comment' data-time='#{time}' title='#{_.escape text}'>"
+			el.css left: "#{rel_time*100}%"
+			bar.append el
+	
+	_refresh_comments_bar video.comments
+
 	$video.on "error", (args...) ->
 		console.log "The details:", video.error
 		alert "Oops, an error occurred, see the console log for details."
@@ -717,6 +779,10 @@ load_ui = (video) ->
 	
 	$("location-bar").on "click", "marker-tag", (ev) ->
 		video.currentTime = $(@).data("time")
+		return false
+	
+	$("location-bar").on "click", ".comment-tag", (ev) ->
+		video.currentTime = video.getEpoch $(@).data("time")
 		return false
 	
 	$("location-bar").click (ev) ->
