@@ -3,6 +3,8 @@
   Released under AGPLv3 license.
   Copyright 2014 Otto Lappi <otto.lappi@helsinki.fi>
   Technical contact: Jami Pekkanen <jami.pekkanen@helsinki.fi>
+
+  TODO: Bit of a mess.
 -->
 <html>
 <head>
@@ -11,6 +13,7 @@
 <script type="text/javascript" src="vendor/underscore.js"></script>
 <script type="text/javascript" src="vendor/jquery-2.1.1.min.js"></script>
 <script type="text/javascript" src="vendor/jquery-deparam.js"></script>
+<script type="text/javascript" src="vendor/Dexie.js"></script>
 <script type="text/javascript" src="vendor/signals.js"></script>
 <script type="text/javascript" src="vendor/hasher.js"></script>
 <script type="text/javascript" src="vendor/mousetrap.js"></script>
@@ -18,7 +21,7 @@
 <script type="text/javascript" src="vendor/jquery.injectCSS.js"></script>
 <!-- TODO: Allow offline -->
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css">
-<link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+<link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
 <style type="text/less">
 body, html {
 	width: 100%;
@@ -192,7 +195,6 @@ location-bar {
 	z-index: 1;
 
 	@crosshair_width: 1px;
-	@crosshair_border_width: 1px;
 
 	crosshair-area {
 		pointer-events: none;
@@ -206,12 +208,12 @@ location-bar {
 	crosshair-bar {
 		cursor: none;
 		pointer-events: none;
-		box-sizing: content-box;
+		box-sizing: border-box;
 		display: none;
 		width: @crosshair_width;
+		
 		background-color: black;
-		/*border: @crosshair_border_width solid white;*/
-		box-shadow: 0 0 0 @crosshair_border_width white;
+		border: 0 dotted white;
 
 		position: absolute;
 		padding: 0; margin: 0;
@@ -220,13 +222,17 @@ location-bar {
 		&.horizontal {
 			height: @crosshair_width;
 			width: 100%;
-			margin-top: -@crosshair_width;
+			margin-top: -@crosshair_width/2.0;
+			border-top-width: @crosshair_width;
+			border-bottom-width: @crosshair_width;
 		}
 		
 		&.vertical {
 			width: @crosshair_width;
 			height: 100%;
-			margin-left: -@crosshair_width;
+			margin-left: -@crosshair_width/2.0;
+			border-left-width: @crosshair_width;
+			border-right-width: @crosshair_width;
 		}
 		
 
@@ -236,25 +242,26 @@ location-bar {
 .crossmarker {
 	position: absolute;
 	@boxsize: 20px;
-	@crosssize: 31px;
-	@crossborderwidth: 1px;
+	@crosssize: 30px;
 	@crosswidth: 1px;
-	@common_offset: @boxsize/2 + @crossborderwidth + @crosswidth;
+	@common_offset: @boxsize/2 + @crosswidth/2.0;
+	opacity: 0.8;
 	&:before, &:after {
 		content: "";
 		background-color: black;
-		border: @crossborderwidth solid white;
-		box-sizing: content-box;
+		border: 0 dotted white;
+		box-sizing: border-box;
 		
 		position: absolute;
 		z-index: -1;
 	}
 	
-	
 	&:before {
 		/* Vertical bar */
 		margin-top: -@common_offset - @crosssize/2;
 		margin-left: -@common_offset;
+		border-left-width: @crosswidth; 
+		border-right-width: @crosswidth; 
 		height: @crosssize;
 		width: @crosswidth;
 	}
@@ -265,6 +272,8 @@ location-bar {
 		margin-left: -@common_offset - @crosssize/2;
 		//margin-left: -@crosssize/2 - @boxsize/2;
 		//margin-top: -@boxsize/2;
+		border-top-width: @crosswidth; 
+		border-bottom-width: @crosswidth; 
 		width: @crosssize;
 		height: @crosswidth;
 	}
@@ -567,34 +576,47 @@ load_ui = (video) ->
 		setInterval hack_the_fucking_rescale, interval
 	rescaling_hack_that_shouldnt_be_needed $("#videocontainer"), -> [video.videoWidth, video.videoHeight]
 	
+	# TODO: We could probably hook into the DB events
+	#	for nicer refreshes
+	markerdb = new Dexie "supercatatoniavideonaxu/#{video.marker_id}"
+	markerdb.version(1).stores
+		markers: "time"
+		comments: "time"
+	markerdb.open()
+
+	###
 	get_all_markers = ->
 		markers = JSON.parse localStorage.getItem "supercatatoniavideonaxu/#{video.marker_id}/markers"
 		if not markers
 			markers = {}
 		return markers
+	###
 	
+	# So lazy...
+	dberrorhoarder = (args...) ->
+		console.log "DB error", args
+
 	add_marker = (name, position, time) ->
 		if not time?
 			time = video.getEpoch()
-		markers = get_all_markers()
-		if time not of markers
-			markers[time] = []
-		
-		markers[time].push [name, position]
-		localStorage.setItem "supercatatoniavideonaxu/#{video.marker_id}/markers", JSON.stringify markers
-		_markers_changed()
+		get_markers(time).then (markers) ->
+			markers.markers.push name: name, position: position
+			markerdb.markers.put markers
+			.catch dberrorhoarder
+			.finally _markers_changed
 	
 	delete_marker = (index=-1, time) ->
-		if not time
-			time = video.getEpoch()
-		markers = get_all_markers()
-		if time not of markers
-			markers[time] = []
-		markers[time].splice index, 1
-		if markers[time].length == 0
-			delete markers[time]
-		localStorage.setItem "supercatatoniavideonaxu/#{video.marker_id}/markers", JSON.stringify markers
-		_markers_changed()
+		get_markers(time)
+		.then (markers) ->
+			markers.markers.splice index, 1
+			if markers.markers.length == 0
+				markerdb.markers.where("time").equals(markers.time).delete()
+				.finally _markers_changed
+				return
+			
+			markerdb.markers.put(markers)
+			.catch dberrorhoarder
+			.finally _markers_changed
 	
 	_markers_changed = ->
 		_refresh_markers()
@@ -603,11 +625,14 @@ load_ui = (video) ->
 	get_markers = (time) ->
 		if not time?
 			time = video.getEpoch()
-		markers = get_all_markers()
-	
-		if time not of markers
-			return []
-		return markers[time]
+
+		promise = markerdb.markers.where("time").equals(time).first (item) ->
+			if not item?
+				return time: time, markers: []
+			return item
+
+		return promise
+
 	
 	video.getEpoch = (time=@.currentTime) ->
 		epoch = Math.floor time/@.epochDuration
@@ -617,20 +642,21 @@ load_ui = (video) ->
 		@.currentTime = @.getEpoch() + n*@.epochDuration
 	
 	_refresh_markers = (time=video.currentTime) ->
-		markers = get_markers(time)
 		container = $("#markers")
 		container.empty()
-		for [k, pos] in markers
-			x = pos[0]*100
-			y = pos[1]*100
-			el = $("<div class='crossmarker'>")
-			el.text(k)
-			el.css
-				left: "#{x}%"
-				top: "#{y}%"
-			container.append(el)
-		
-		_refresh_markers_table(time)
+		# Come on! Gimme the yield already!
+		get_markers(time).then (markers) ->
+			for {name, position} in markers.markers
+				x = position[0]*100
+				y = position[1]*100
+				el = $("<div class='crossmarker'>")
+				el.text(name)
+				el.css
+					left: "#{x}%"
+					top: "#{y}%"
+				container.append(el)
+			
+			_refresh_markers_table(time)
 	
 	_refresh_markers_table = (time) ->
 		container = $("csv-block")
@@ -646,9 +672,8 @@ load_ui = (video) ->
 	_refresh_marker_bar = ->
 		bar = $("location-stripe")
 		bar.empty()
-		for time, markers of get_all_markers()
-			if markers.length == 0
-				continue
+		markerdb.markers.toCollection().eachKey (time) ->
+			console.log time
 			rel_time = time/video.duration
 			el = $("<marker-tag data-time='#{time}'>").appendTo bar
 			el.css left: "#{rel_time*100}%"
