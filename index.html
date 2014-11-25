@@ -662,18 +662,18 @@ load_ui = (video) ->
 		container = $("csv-block")
 		table = container.find("> table > tbody")
 		table.empty()
-		time = video.getEpoch(time)
-		for [name, [x, y]] in get_markers()
-			x = Math.round(x*video.videoWidth)
-			y = Math.round(y*video.videoWidth)
-			row = $("<tr>").appendTo table
-			row.append($ ("<td>#{v}</td>" for v in [name, x, y]).join(''))
+		get_markers(time).then (markers) ->
+			for {name, position} in markers.markers
+				[x, y] = position
+				x = Math.round(x*video.videoWidth)
+				y = Math.round(y*video.videoWidth)
+				row = $("<tr>").appendTo table
+				row.append($ ("<td>#{v}</td>" for v in [name, x, y]).join(''))
 	
 	_refresh_marker_bar = ->
 		bar = $("location-stripe")
 		bar.empty()
 		markerdb.markers.toCollection().eachKey (time) ->
-			console.log time
 			rel_time = time/video.duration
 			el = $("<marker-tag data-time='#{time}'>").appendTo bar
 			el.css left: "#{rel_time*100}%"
