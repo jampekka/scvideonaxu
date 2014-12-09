@@ -671,7 +671,6 @@ load_ui = (video) ->
 	
 	_markers_changed = ->
 		_refresh_markers()
-		_refresh_marker_bar()
 	
 	get_markers = (time) ->
 		if not time?
@@ -729,6 +728,15 @@ load_ui = (video) ->
 			el = $("<marker-tag data-time='#{time}'>").appendTo bar
 			el.css left: "#{rel_time*100}%"
 	
+	_refresh_marker_bar()
+	markerdb.markers.hook "creating", (mod, key, trans) ->
+		trans.on "complete", _refresh_marker_bar
+	
+	markerdb.markers.hook "deleting", (mod, key, trans) ->
+		trans.on "complete", _refresh_marker_bar
+
+	#markerdb.markers.hook "deleting", -> @onsuccess = _refresh_marker_bar
+
 	
 	_refresh_comments_bar = (comments) ->
 		bar = $("location-notes")
@@ -760,7 +768,6 @@ load_ui = (video) ->
 		$.injectCSS
 			"marker-tag":
 				"width": "#{video.epochDuration/video.duration*100}%"
-		_refresh_marker_bar()
 	
 	$state.on "change.epochDuration", (ev, dur) -> set_epoch_duration dur
 	
