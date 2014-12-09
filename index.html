@@ -722,11 +722,15 @@ load_ui = (video) ->
 	
 	_refresh_marker_bar = ->
 		bar = $("location-stripe")
+		elements = []
 		bar.empty()
-		markerdb.markers.toCollection().eachKey (time) ->
+		markerdb.markers.toCollection().eachKey((time) ->
 			rel_time = time/video.duration
-			el = $("<marker-tag data-time='#{time}'>").appendTo bar
+			el = $("<marker-tag data-time='#{time}'>")
 			el.css left: "#{rel_time*100}%"
+			elements.push el
+		).then ->
+			bar.append elements
 	
 	_refresh_marker_bar()
 	markerdb.markers.hook "creating", (mod, key, trans) ->
