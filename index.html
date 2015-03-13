@@ -20,6 +20,8 @@
 <script type="text/javascript" src="vendor/mousetrap.js"></script>
 <script type="text/javascript" src="vendor/jquery.mousewheel.js"></script>
 <script type="text/javascript" src="vendor/jquery.injectCSS.js"></script>
+<script type="text/javascript" src="vendor/jszip.js"></script>
+<script type="text/javascript" src="vendor/FileSaver.js"></script>
 <!-- TODO: Allow offline -->
 <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.0/css/bootstrap.min.css">
 <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
@@ -421,7 +423,8 @@ extra-actions {
 <open-modal>
 <input style="display: none" type="file" id="fileselector" accept="video/*,.comments.json" multiple></input>
 <huge-buttons>
-<button onclick="$('#fileselector').click()" id="openlocalbutton" title="Open local video"><i class="fa fa-upload"></i></button>
+<button onclick="$('#fileselector').click()" id="openlocalbutton" title="Open local video"><i class="fa fa-file-video-o"></i></button>
+<button onclick="download_all_markers()" id="openlocalbutton" title="Download all markers"><i class="fa fa-file-zip-o"></i></button>
 </huge-buttons>
 
 </open-modal>
@@ -555,6 +558,24 @@ $ ->
 	
 	# Doesn't seem to work :(
 	#$('#fileselector').click()
+
+DB_PREFIX = "supercatatoniavideonaxu/"
+
+db_marker_id = (name) ->
+	if not _.str.startsWith name, DB_PREFIX
+		return
+	return name[DB_PREFIX.length..]
+
+get_markerdb = (marker_id) ->
+	# TODO: We could probably hook into the DB events
+	#	for nicer refreshes
+	markerdb = new Dexie "#{DB_PREFIX}#{marker_id}"
+	markerdb.version(1).stores
+		markers: "time"
+		comments: "time"
+	markerdb.open()
+	return markerdb
+
 	
 load_ui = (video) ->
 	$video = $ video
@@ -626,23 +647,8 @@ load_ui = (video) ->
 	rescaling_hack_that_shouldnt_be_needed $("#videocontainer"), -> [video.videoWidth, video.videoHeight]
 	
 	
+	markerdb = get_markerdb video.marker_id
 
-	# TODO: We could probably hook into the DB events
-	#	for nicer refreshes
-	markerdb = new Dexie "supercatatoniavideonaxu/#{video.marker_id}"
-	markerdb.version(1).stores
-		markers: "time"
-		comments: "time"
-	markerdb.open()
-
-	###
-	get_all_markers = ->
-		markers = JSON.parse localStorage.getItem "supercatatoniavideonaxu/#{video.marker_id}/markers"
-		if not markers
-			markers = {}
-		return markers
-	###
-	
 	# So lazy...
 	dberrorhoarder = (args...) ->
 		console.log "DB error", args
@@ -850,5 +856,39 @@ load_ui = (video) ->
 	hasher.changed.add $state._refresh
 	hasher.initialized.add $state._refresh
 	hasher.init()
+
+get_db_dump = (name) ->
+	dump = {}
+	db = get_markerdb name
+	
+	dumps = db.tables.map (table) ->
+		table.toArray().then (data) ->
+			obj = {}
+			obj[table.name] = data
+			return obj
+	
+	Dexie.Promise.all(dumps).then (results) ->
+		obj = {}
+		obj[name] = _.extend {}, results...
+		return obj
+			
+#@NEVER_CALL_THIS = ->
+#	Dexie.getDatabaseNames (names) ->
+#		for name in names
+#			(new Dexie name).delete()
+
+@download_all_markers = ->
+	Dexie.getDatabaseNames (names) ->
+		names = names.map(db_marker_id).filter (name) -> Boolean name
+		Dexie.Promise.all(names.map(get_db_dump)).then (dumps) ->
+			dumps = _.extend dumps...
+			output = new JSZip
+			for key, value of dumps
+				name = key.replace(/\//g, '-') + ".json"
+				output.file name, JSON.stringify value
+
+			fname = "scvideonaxu-#{new Date().toISOString()}.zip"
+			saveAs output.generate(type: "blob"), fname
+		
 </script>
 </html>
