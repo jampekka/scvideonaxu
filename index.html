@@ -885,7 +885,7 @@ get_db_dump = (name) ->
 			output = new JSZip
 			for key, value of dumps
 				name = key.replace(/\//g, '-') + ".json"
-				output.file name, JSON.stringify value
+				output.file name, JSON.stringify value, null, '\t'
 
 			fname = "scvideonaxu-#{new Date().toISOString()}.zip"
 			saveAs output.generate(type: "blob"), fname
