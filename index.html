@@ -720,6 +720,7 @@ load_ui = (video) ->
 		container.empty()
 		# Come on! Gimme the yield already!
 		get_markers(time).then (markers) ->
+			container.empty()
 			for {name, position} in markers.markers
 				x = position[0]*100
 				y = position[1]*100
@@ -737,6 +738,7 @@ load_ui = (video) ->
 		table = container.find("> table > tbody")
 		table.empty()
 		get_markers(time).then (markers) ->
+			table.empty()
 			for {name, position} in markers.markers
 				[x, y] = position
 				x = Math.round(x*video.videoWidth)
