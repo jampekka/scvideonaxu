@@ -177,6 +177,13 @@ location-bar {
 			height: 100%;
 			min-width: 1px;
 			cursor: pointer;
+
+			&.unreachable {
+				background-color: red;
+				cursor: help;
+				width: 5px !important;
+				bottom: 10px;
+			}
 		}
 
 		
@@ -683,16 +690,32 @@ load_ui = (video) ->
 			return item
 
 		return promise
-
 	
+
+	video._pendingEpoch = undefined
+	video._reachedEpoch = 0.0
+	Object.defineProperty video, 'currentEpoch',
+		get: -> @._reachedEpoch
+		set: (v) ->
+			@._pendingEpoch = video.getEpoch v
+			@.currentTime = @._pendingEpoch
+	
+	$video.on "timeupdate", (ev) ->
+		if video._pendingEpoch?
+			video._reachedEpoch = video._pendingEpoch
+			video._pendingEpoch = undefined
+		else
+			video._reachedEpoch = video.getEpoch video.currentTime
+
 	video.getEpoch = (time=@.currentTime) ->
-		epoch = Math.floor time/@.epochDuration
-		return epoch*@.epochDuration
+		epoch = Math.round time/@.epochDuration
+		# Floats suck!
+		return Number (epoch*@.epochDuration).toFixed(video._epochDecimals)
 	
 	video.stepEpochs = (n) ->
-		@.currentTime = @.getEpoch() + n*@.epochDuration
+		@.currentEpoch += n*@.epochDuration
 	
-	_refresh_markers = (time=video.currentTime) ->
+	_refresh_markers = (time=video.currentEpoch) ->
 		container = $("#markers")
 		container.empty()
 		# Come on! Gimme the yield already!
@@ -729,6 +752,10 @@ load_ui = (video) ->
 			rel_time = time/video.duration
 			el = $("<marker-tag data-time='#{time}'>")
 			el.css left: "#{rel_time*100}%"
+			el.prop "title", "#{time.toFixed(video._epochDecimals)}s"
+			if time != video.getEpoch time
+				el.addClass "unreachable"
+				el.prop "title", "Frame at #{time}s unreachable at resolution #{video.epochDuration}s!"
 			elements.push el
 		).then ->
 			bar.append elements
@@ -767,12 +794,15 @@ load_ui = (video) ->
 	#	video.load()
 	
 	set_epoch_duration = (dur) ->
+		dur = Number(dur)
+		video._epochDecimals = (String(dur).split('.')[1] ? '').length
 		video.epochDuration = dur
 		$("#epoch_forward").prop "title", "#{dur}s forward (space, right, mouse scroll up)"
 		$("#epoch_backward").prop "title", "#{dur}s backward (left, mouse scroll down)"
 		$.injectCSS
 			"marker-tag":
 				"width": "#{video.epochDuration/video.duration*100}%"
+		_refresh_marker_bar()
 	
 	$state.on "change.epochDuration", (ev, dur) -> set_epoch_duration dur
 	
@@ -780,29 +810,31 @@ load_ui = (video) ->
 		# TODO: Sometimes jquery/chromium won't update the DOM immediately,
 		#	but only after an event such as mouse move. This sometimes
 		#	leaves the ui in an inconsistent state.
-		time = video.currentTime
+		time = video.currentEpoch
+
 		_refresh_markers(time)
+		timestring = time.toFixed(video._epochDecimals)
 		$("current-location i").css
 			left: "#{time/@duration*100}%"
-		$("#timetext").text time
-		$state.replace_url ts: time
+		$("#timetext").text timestring
+		$state.replace_url ts: timestring
 	
 	$state.on "change.ts", (ev, newts) ->
-		video.currentTime = newts
+		video.currentEpoch = newts
 	
 	$("location-bar").on "click", "marker-tag", (ev) ->
-		video.currentTime = $(@).data("time")
+		video.currentEpoch = $(@).data("time")
 		return false
 	
 	$("location-bar").on "click", ".comment-tag", (ev) ->
-		video.currentTime = video.getEpoch $(@).data("time")
+		video.currentEpoch = video.getEpoch $(@).data("time")
 		return false
 	
 	$("location-bar").click (ev) ->
 		x = ev.pageX - $(@).offset().left
 		rel_x = x/$(@).innerWidth()
 		time = video.duration*rel_x
-		video.currentTime = video.getEpoch time
+		video.currentEpoch = time
 
 	act = -> video.stepEpochs 1; return false
 	$("#epoch_forward").click act
