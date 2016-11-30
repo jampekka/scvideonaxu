@@ -356,11 +356,33 @@ bottom-block {
 	display: flex;
 }
 
+sidebar {
+	display: flex;
+	width: 300px;
+	flex-grow: 1;
+	flex-direction: column;
+	background-color: #eee;
+	color: black;
+}
+
+comment-block {
+	display: block;
+	width: 100%;
+	
+	textarea {
+		width: 100%;
+		background-color: inherit;
+
+		&:focus {
+			background-color: white;
+		}
+	}
+}
+
 csv-block {
 	width: 300px;
 	overflow: auto;
-	background-color: #eee;
-	color: black;
+	
 	> .markertable {
 		color: #333;
 		width: 100%;
@@ -474,6 +496,12 @@ extra-actions {
   </div>
 </div>
 
+<sidebar>
+<comment-block>
+	<h4>Comments</h4>
+	<textarea id="comment"></textarea>
+</comment-block>
+
 <csv-block>
 <table class="markertable table">
 <thead>
@@ -483,7 +511,7 @@ extra-actions {
 </tbody>
 </table>
 </csv-block>
-
+</sidebar>
 </bottom-block>
 
 </layout-hack>
@@ -654,6 +682,9 @@ load_ui = (video) ->
 	# So lazy...
 	dberrorhoarder = (args...) ->
 		console.log "DB error", args
+	
+	set_comment = (comment, time=video.getEpoch()) ->
+		
 
 	add_marker = (name, position, time) ->
 		if not time?
@@ -687,6 +718,14 @@ load_ui = (video) ->
 		promise = markerdb.markers.where("time").equals(time).first (item) ->
 			if not item?
 				return time: time, markers: []
+			return item
+
+		return promise
+	
+	get_comment = (time=video.getEpoch()) ->
+		promise = markerdb.comments.where("time").equals(time).first (item) ->
+			if not item?
+				return time: time, comment: ''
 			return item
 
 		return promise
@@ -733,6 +772,24 @@ load_ui = (video) ->
 			
 			_refresh_markers_table(time)
 	
+
+	_refresh_comments = (time=video.currentEpoch) ->
+		container = $("#comment")
+		get_comment(time).then (comment) ->
+			container.val comment.text
+	
+	set_comment = (text, time=video.currentEpoch) ->
+		if text != ''
+			p = markerdb.comments.put time: time, text: text
+		else
+			p = markerdb.comments.where("time").equals(time).delete()
+		p.catch dberrorhoarder
+		.finally _refresh_comments_bar
+		
+	
+	$("#comment").change ->
+		set_comment($("#comment").val())
+	
 	_refresh_markers_table = (time) ->
 		container = $("csv-block")
 		table = container.find("> table > tbody")
@@ -771,8 +828,10 @@ load_ui = (video) ->
 
 	#markerdb.markers.hook "deleting", -> @onsuccess = _refresh_marker_bar
 
-	
-	_refresh_comments_bar = (comments) ->
+	_refresh_comments_bar = ->
+		markerdb.comments.toArray().then _do_refresh_comments_bar
+
+	_do_refresh_comments_bar = (comments) ->
 		bar = $("location-notes")
 		bar.empty()
 		for {time, text} in comments
@@ -781,7 +840,7 @@ load_ui = (video) ->
 			el.css left: "#{rel_time*100}%"
 			bar.append el
 	
-	_refresh_comments_bar video.comments
+	_refresh_comments_bar()
 
 	$video.on "error", (args...) ->
 		console.log "The details:", video.error
@@ -815,6 +874,7 @@ load_ui = (video) ->
 		time = video.currentEpoch
 
 		_refresh_markers(time)
+		_refresh_comments(time)
 		timestring = time.toFixed(video._epochDecimals)
 		$("current-location i").css
 			left: "#{time/@duration*100}%"
