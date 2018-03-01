@@ -72,6 +72,17 @@ button, .button {
 	}
 }
 
+.delbutton {
+	width: auto;
+	height: auto;
+	font-size: inherit;
+	margin: 0;
+	padding: 0;
+	padding-left: 4px;
+	padding-right: 4px;
+}
+
+
 open-modal {
 	background-color: black;
 	position: absolute;
@@ -505,7 +516,7 @@ extra-actions {
 <csv-block>
 <table class="markertable table">
 <thead>
-<tr><th>Name</th><th>x</th><th>y</th></tr>
+	<tr><th>Name</th><th>x</th><th>y</th><th></th></tr>
 </thead>
 <tbody>
 </tbody>
@@ -796,12 +807,16 @@ load_ui = (video) ->
 		table.empty()
 		get_markers(time).then (markers) ->
 			table.empty()
-			for {name, position} in markers.markers
-				[x, y] = position
-				x = Math.round(x*video.videoWidth)
-				y = Math.round(y*video.videoWidth)
-				row = $("<tr>").appendTo table
-				row.append($ ("<td>#{v}</td>" for v in [name, x, y]).join(''))
+			for {name, position}, i in markers.markers
+				do (name, position, i) ->
+					[x, y] = position
+					x = Math.round(x*video.videoWidth)
+					y = Math.round(y*video.videoWidth)
+					row = $("<tr>").appendTo table
+					row.append($ ("<td>#{v}</td>" for v in [name, x, y]).join(''))
+					delb = $ "<td><button class='delbutton'>x</button></td>"
+					delb.click(-> delete_marker(i, time))
+					row.append delb
 	
 	_refresh_marker_bar = ->
 		bar = $("location-stripe")
