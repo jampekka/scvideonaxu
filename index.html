@@ -929,7 +929,7 @@ load_ui = (video) ->
 		if not videomouse
 			return
 		button = String.fromCharCode(ev.keyCode)
-		if not $.isNumeric(button)
+		if not ($.isNumeric(button) or "qwertyuiopå".search(button) >= 0)
 			return
 		
 		ev.preventDefault()
